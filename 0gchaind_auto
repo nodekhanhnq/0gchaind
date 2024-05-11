@@ -1,144 +1,102 @@
-#!/bin/bash
-clear
-
-if [[ ! -f "$HOME/.bash_profile" ]]; then
-    touch "$HOME/.bash_profile"
-fi
-
-if [ -f "$HOME/.bash_profile" ]; then
-    source $HOME/.bash_profile
-fi
-
-logo_khanhnq(){
-
-clear
-
- cat << "EOF"
-=========================================================================
-  _  _   _  _   _  _   _  _   _  _   _  _   _  _   _  _   _  _   _  _   _  _  
- / |/ \ | |/ \ | |/ \ | |/ \ | |/ \ | |/ \ | |/ \ | |/ \ | |/ \ | |/ \ | |/ \ 
-(  k    |  h   |  a   |  n   |  h   |  n   |  q   |  _   |  _   |  _   |  _   )
- \_|\_/ |_|\_/ |_|\_/ |_|\_/ |_|\_/ |_|\_/ |_|\_/ |_|\_/ |_|\_/ |_|\_/ |_|\_/ 
-
-
-=========================================================================
-             Developed by: khanhnq86
-             Twitter: https://twitter.com/Zka231186
-             Telegram: https://t.me/duykhanhvn
-=========================================================================
-EOF
-
-}
-
-logo_khanhnq;
-
-
-
-echo "===========Union Install Easy======= " && sleep 1
-
-read -p "Do you want run node Union ? (y/n): " choice
-
-if [ "$choice" == "y" ]; then
-
-# Install Package
-sudo apt-get update && sudo apt-get upgrade -y
-sudo apt install unzip wget curl build-essential git screen jq pkg-config libssl-dev libclang-dev ca-certificates gnupg lsb-release -y
-
-# install go, if needed
-cd $HOME
-VER="1.22.3"
-wget "https://golang.org/dl/go$VER.linux-amd64.tar.gz"
-sudo rm -rf /usr/local/go
-sudo tar -C /usr/local -xzf "go$VER.linux-amd64.tar.gz"
-rm "go$VER.linux-amd64.tar.gz"
-[ ! -f ~/.bash_profile ] && touch ~/.bash_profile
-echo "export PATH=$PATH:/usr/local/go/bin:~/go/bin" >> ~/.bash_profile
-source $HOME/.bash_profile
-[ ! -d ~/go/bin ] && mkdir -p ~/go/bin
-
-# set vars
-echo "export WALLET="wallet"" >> $HOME/.bash_profile
-echo "export MONIKER="khanhnq86"" >> $HOME/.bash_profile
-echo "export OG_CHAIN_ID="zgtendermint_16600-1"" >> $HOME/.bash_profile
-echo "export OG_PORT="33"" >> $HOME/.bash_profile
-source $HOME/.bash_profile
-
-# download binary
-cd $HOME
-git clone -b v0.1.0 https://github.com/0glabs/0g-chain.git
-./0g-chain/networks/testnet/install.sh
-source .profile
-
-# config and init app
-0gchaind config node tcp://localhost:${OG_PORT}657
-0gchaind config keyring-backend os
-0gchaind config chain-id zgtendermint_16600-1
-0gchaind init "khanhnq86" --chain-id zgtendermint_16600-1
-
-# download genesis
-rm ~/.0gchain/config/genesis.json
-wget -P ~/.0gchain/config https://github.com/0glabs/0g-chain/releases/download/v0.1.0/genesis.json
-
-# Then verify the correctness of the genesis configuration file
-0gchaind validate-genesis
-
-# set custom ports in app.toml
-sed -i.bak -e "s%:1317%:${OG_PORT}317%g;
-s%:8080%:${OG_PORT}080%g;
-s%:9090%:${OG_PORT}090%g;
-s%:9091%:${OG_PORT}091%g;
-s%:8545%:${OG_PORT}545%g;
-s%:8546%:${OG_PORT}546%g;
-s%:6065%:${OG_PORT}065%g" $HOME/.0gchain/config/app.toml
-
-# set custom ports in config.toml file
-sed -i.bak -e "s%:26658%:${OG_PORT}658%g;
-s%:26657%:${OG_PORT}657%g;
-s%:6060%:${OG_PORT}060%g;
-s%:26656%:${OG_PORT}656%g;
-s%^external_address = \"\"%external_address = \"$(wget -qO- eth0.me):${OG_PORT}656\"%;
-s%:26660%:${OG_PORT}660%g" $HOME/.0gchain/config/config.toml
-
-# set seeds and peers
-SEEDS="c4d619f6088cb0b24b4ab43a0510bf9251ab5d7f@54.241.167.190:26656,44d11d4ba92a01b520923f51632d2450984d5886@54.176.175.48:26656,f2693dd86766b5bf8fd6ab87e2e970d564d20aff@54.193.250.204:26656,f878d40c538c8c23653a5b70f615f8dccec6fb9f@18.166.164.232:26656"
-PEERS=""
-sed -i -e "s/^seeds *=.*/seeds = \"$SEEDS\"/; s/^persistent_peers *=.*/persistent_peers = \"$PEERS\"/" $HOME/.0gchain/config/config.toml
-
-# config pruning
-sed -i -e "s/^pruning *=.*/pruning = \"custom\"/" $HOME/.0gchain/config/app.toml
-sed -i -e "s/^pruning-keep-recent *=.*/pruning-keep-recent = \"100\"/" $HOME/.0gchain/config/app.toml
-sed -i -e "s/^pruning-interval *=.*/pruning-interval = \"50\"/" $HOME/.0gchain/config/app.toml
-
-# set minimum gas price, enable prometheus and disable indexing
-sed -i 's|minimum-gas-prices =.*|minimum-gas-prices = "0agnet"|g' $HOME/.0gchain/config/app.toml
-sed -i -e "s/prometheus = false/prometheus = true/" $HOME/.0gchain/config/config.toml
-sed -i -e "s/^indexer *=.*/indexer = \"null\"/" $HOME/.0gchain/config/config.toml
-
-# create service file
-sudo tee /etc/systemd/system/0gchaind.service > /dev/null <<EOF
-[Unit]
-Description=Og node
-After=network-online.target
-[Service]
-User=$USER
-WorkingDirectory=$HOME/.0gchain
-ExecStart=$(which 0gchaind) start --home $HOME/.0gchain
-Restart=on-failure
-RestartSec=5
-LimitNOFILE=65535
-[Install]
-WantedBy=multi-user.target
-EOF
-
-# enable and start service
-sudo systemctl daemon-reload
-sudo systemctl enable 0gchaind
-sudo systemctl restart 0gchaind && sudo journalctl -u 0gchaind -f --no-hostname -o cat
-
-
-echo "Check status: sudo systemctl status 0gchaind "
-
-echo "check logs: sudo journalctl -fu 0gchaind -o cat "
-
-echo "Check sync: 0gchaind status 2>&1 | jq .SyncInfo.catching_up"
-fi
+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
+Ej22d9ANCjz1vqNazDnC/w==
