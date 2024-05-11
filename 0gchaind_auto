@@ -34,9 +34,9 @@ logo_khanhnq;
 
 
 
-echo "===========Union Install Easy======= " && sleep 1
+echo "===========0gchaind Install Easy======= " && sleep 1
 
-read -p "Do you want run node Union ? (y/n): " choice
+read -p "Do you want run node 0gchaind ? (y/n): " choice
 
 if [ "$choice" == "y" ]; then
 
@@ -134,7 +134,7 @@ EOF
 sudo systemctl daemon-reload
 sudo systemctl enable 0gchaind
 sudo systemctl restart 0gchaind && sudo journalctl -u 0gchaind -f --no-hostname -o cat
-
+sudo systemctl start 0gchaind
 
 echo "Check status: sudo systemctl status 0gchaind "
 
